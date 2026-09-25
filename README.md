@@ -4,12 +4,14 @@ Home Assistant with ESPHome, Matter Server and the Everything Presence mmWave Co
 
 | File | Adds |
 |---|---|
-| `docker-compose.yml` | Base: Home Assistant, ESPHome, Matter Server, EP configurator |
-| `docker-compose.traefik.yml` | Traefik routing + TLS for Home Assistant, ESPHome, EP configurator |
+| `docker-compose.yml` | Base: Home Assistant, Matter Server |
+| `docker-compose.traefik.yml` | Traefik routing + TLS for Home Assistant |
+| `docker-compose.esp.yml` | ESPHome, Everything Presence mmWave Configurator |
+| `docker-compose.esp.traefik.yml` | Traefik routing + TLS for ESPHome and EP configurator - needs both `esp` and `traefik` overlays |
 | `docker-compose.mqtt.yml` | Mosquitto on 1883 (LAN-only, no TLS) - skip if another broker (e.g. an SMHub) already handles MQTT |
 | `docker-compose.cloudflared.yml` | Cloudflare Tunnel for external access |
 
-Home Assistant, ESPHome and Matter Server use `network_mode: host` - needed for mDNS/SSDP discovery, Matter and Bluetooth - so they can't join a Docker network. The Traefik overlay routes to them via the host instead (see [Traefik Integration](#traefik-integration)).
+Home Assistant, ESPHome and Matter Server use `network_mode: host` - needed for mDNS/SSDP discovery, Matter and Bluetooth - so they can't join a Docker network. The Traefik overlays route to them via the host instead (see [Traefik Integration](#traefik-integration)).
 
 ## Quick Start
 
@@ -18,9 +20,9 @@ Home Assistant, ESPHome and Matter Server use `network_mode: host` - needed for 
 cp .env.example .env
 ```
 
-2. Edit `.env` - set the `*_HOST` values if using Traefik. The EP configurator reaches HA directly via `host.docker.internal:8123` by default, so `HA_BASE_URL` only needs setting for an HA elsewhere.
+2. Edit `.env` - set the `*_HOST` values if using Traefik. With the ESP overlay, the EP configurator reaches HA directly via `host.docker.internal:8123` by default, so `HA_BASE_URL` only needs setting for an HA elsewhere.
 
-3. Create the EP configurator's token file (gitignored). The token is a long-lived token from HA (**Profile → Security**), so this step can wait until HA is running:
+3. ESP overlay only: create the EP configurator's token file (gitignored). The token is a long-lived token from HA (**Profile → Security**), so this step can wait until HA is running:
 ```bash
 mkdir -p secrets
 echo -n "your-long-lived-token" > secrets/ha_long_lived_token
@@ -39,12 +41,17 @@ docker compose up -d
 # Traefik
 docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
 
-# Traefik + MQTT + Cloudflare Tunnel
+# Traefik + ESP
 docker compose -f docker-compose.yml -f docker-compose.traefik.yml \
+  -f docker-compose.esp.yml -f docker-compose.esp.traefik.yml up -d
+
+# Everything
+docker compose -f docker-compose.yml -f docker-compose.traefik.yml \
+  -f docker-compose.esp.yml -f docker-compose.esp.traefik.yml \
   -f docker-compose.mqtt.yml -f docker-compose.cloudflared.yml up -d
 ```
 
-Standalone access: Home Assistant at `http://<host>:8123`, ESPHome at `http://<host>:6052`, EP configurator at `http://<host>:42069`.
+Standalone access: Home Assistant at `http://<host>:8123`; with the ESP overlay, ESPHome at `http://<host>:6052` and EP configurator at `http://<host>:42069`.
 
 ### Traefik Integration
 
@@ -144,6 +151,8 @@ include:
   - path:
       - /mnt/<pool>/Apps/home-assistant-stack/docker-compose.yml
       - /mnt/<pool>/Apps/home-assistant-stack/docker-compose.traefik.yml
+      #- /mnt/<pool>/Apps/home-assistant-stack/docker-compose.esp.yml
+      #- /mnt/<pool>/Apps/home-assistant-stack/docker-compose.esp.traefik.yml
       #- /mnt/<pool>/Apps/home-assistant-stack/docker-compose.mqtt.yml
       #- /mnt/<pool>/Apps/home-assistant-stack/docker-compose.cloudflared.yml
 
@@ -152,7 +161,7 @@ include:
 # Use literal hostnames: .env isn't applied to this file.
 x-portals:
   - {name: Home Assistant, scheme: https, host: ha.yourdomain.com, port: 443, path: /}
-  - {name: ESPHome, scheme: https, host: esphome.yourdomain.com, port: 443, path: /}
+  #- {name: ESPHome, scheme: https, host: esphome.yourdomain.com, port: 443, path: /}   # with the ESP overlays
 ```
 
 The dataset is the project directory, so `.env`, `./secrets` and the app data directories all resolve inside it. Set `MATTER_INTERFACE` in `.env` to the TrueNAS NIC carrying your LAN IP (`ip -br addr`) - TrueNAS doesn't use `eth0`-style names, and a name that doesn't exist on the host crashes matter-server with `Unknown interface`.

@@ -1,0 +1,51 @@
+---
+# Traefik routing for the ESP overlay - use together with
+# docker-compose.esp.yml and docker-compose.traefik.yml. ESPHome uses host
+# networking, so it gets labels only (reached via host.docker.internal, like
+# Home Assistant); EP configurator joins the traefik network.
+x-logging:
+  &default-logging
+  driver: "json-file"
+  options:
+    max-size: "1m"
+    max-file: "1"
+    tag: "{{.Name}}"
+
+x-common-labels: &default-labels
+  logging: "promtail"
+  logging_jobname: "containerlogs"
+  stackname: ${MONITORING_STACK}
+
+services:
+  esphome:
+    labels:
+      <<: *default-labels
+      traefik.enable: true
+      traefik.http.routers.esphome.rule: Host(`${ESPHOME_HOST:?set ESPHOME_HOST to the ESPHome hostname}`)
+      traefik.http.routers.esphome.tls: true
+      traefik.http.routers.esphome.tls.certresolver: letsencrypt
+      traefik.http.services.esphome.loadbalancer.server.port: "6052"
+    logging: *default-logging
+
+  everything-presence-configurator:
+    # Web UI (42069) goes via Traefik; 38080 stays published because ESP
+    # devices fetch firmware updates from it directly.
+    ports: !override
+      - "38080:38080"
+    expose:
+      - 42069
+    networks:
+      - traefik
+    labels:
+      <<: *default-labels
+      traefik.enable: true
+      traefik.http.routers.ep-configurator.rule: Host(`${EPC_HOST:?set EPC_HOST to the EP configurator hostname}`)
+      traefik.http.routers.ep-configurator.tls: true
+      traefik.http.routers.ep-configurator.tls.certresolver: letsencrypt
+      traefik.http.services.ep-configurator.loadbalancer.server.port: "42069"
+    logging: *default-logging
+
+networks:
+  traefik:
+    name: ${NETWORK:-traefik}
+    external: true

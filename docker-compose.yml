@@ -1,15 +1,13 @@
 ---
-# Home Assistant stack - base layer. Home Assistant, ESPHome and Matter
-# Server use host networking (mDNS/SSDP discovery, Matter, Bluetooth), so
-# they can't join a Docker network - docker-compose.traefik.yml routes to
-# them via the host instead. MQTT and cloudflared are optional overlays.
+# Home Assistant stack - base layer. Home Assistant and Matter Server use
+# host networking (mDNS/SSDP discovery, Matter, Bluetooth), so they can't
+# join a Docker network - docker-compose.traefik.yml routes to HA via the
+# host instead. ESP, MQTT and cloudflared are optional overlays.
 services:
   ## Home Assistant
   home-assistant:
     container_name: home-assistant
     image: ghcr.io/home-assistant/home-assistant:${HA_VER:-2026.9.2}
-    depends_on:
-      - esphome
     volumes:
       - ./ha/config:/config
       - /etc/localtime:/etc/localtime:ro
@@ -19,21 +17,6 @@ services:
       - TZ=${TZ:-Australia/Brisbane}
     privileged: true
     network_mode: host
-
-  ## ESPHome
-  esphome:
-    container_name: esphome
-    image: ghcr.io/esphome/esphome:${ESPHOME_VER:-latest}
-    restart: unless-stopped
-    environment:
-      - TZ=${TZ:-Australia/Brisbane}
-    privileged: true
-    network_mode: host
-    volumes:
-      - ./esphome/config:/config
-      - ./esphome/build:/build
-      - ./esphome/cache:/cache
-      - /etc/localtime:/etc/localtime:ro
 
   ## Matter Server
   matter-server:
@@ -50,30 +33,3 @@ services:
       # with `ip -br addr`). Optional - empty lets matter-server choose, but
       # a name that doesn't exist on the host is fatal.
       - PRIMARY_INTERFACE=${MATTER_INTERFACE:-}
-
-  ## Everything Presence Configurator
-  everything-presence-configurator:
-    image: everythingsmarthome/everything-presence-mmwave-configurator:${EPC_VER:-latest}
-    container_name: ep-configurator
-    restart: unless-stopped
-    ports:
-      - "42069:42069"
-      # Firmware updates - ESP devices fetch from this port directly
-      - "38080:38080"
-    volumes:
-      - ./epp-configurator:/config
-    # HA uses host networking, so reach it via the host directly - no
-    # dependency on DNS resolving HA_HOST, or on Traefik.
-    extra_hosts:
-      - host.docker.internal:host-gateway
-    environment:
-      - HA_BASE_URL=${HA_BASE_URL:-http://host.docker.internal:8123}
-      # Read from secrets/ha_long_lived_token (gitignored) rather than a plain
-      # env var, which is visible via `docker inspect`.
-      - HA_LONG_LIVED_TOKEN_FILE=/run/secrets/ha_long_lived_token
-    secrets:
-      - ha_long_lived_token
-
-secrets:
-  ha_long_lived_token:
-    file: ./secrets/ha_long_lived_token

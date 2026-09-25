@@ -1,9 +1,9 @@
 ---
-# Traefik overlay. Home Assistant and ESPHome use host networking, so they
-# get labels only (no networks:) - Traefik reaches them via
-# host.docker.internal, which needs `extra_hosts:
-# host.docker.internal:host-gateway` on the Traefik container (set in
-# docker-traefik-portainer). Home Assistant must also trust Traefik as a
+# Traefik overlay for Home Assistant (ESP routing lives in
+# docker-compose.esp.traefik.yml). HA uses host networking, so it gets labels
+# only (no networks:) - Traefik reaches it via host.docker.internal, which
+# needs `extra_hosts: host.docker.internal:host-gateway` on the Traefik
+# container (set in docker-traefik-portainer). HA must also trust Traefik as a
 # reverse proxy (HTTP settings in the UI on HA 2026.8+) - see README.
 x-logging:
   &default-logging
@@ -28,36 +28,3 @@ services:
       traefik.http.routers.home-assistant.tls.certresolver: letsencrypt
       traefik.http.services.home-assistant.loadbalancer.server.port: "8123"
     logging: *default-logging
-
-  esphome:
-    labels:
-      <<: *default-labels
-      traefik.enable: true
-      traefik.http.routers.esphome.rule: Host(`${ESPHOME_HOST:?set ESPHOME_HOST to the ESPHome hostname}`)
-      traefik.http.routers.esphome.tls: true
-      traefik.http.routers.esphome.tls.certresolver: letsencrypt
-      traefik.http.services.esphome.loadbalancer.server.port: "6052"
-    logging: *default-logging
-
-  everything-presence-configurator:
-    # Web UI (42069) goes via Traefik; 38080 stays published because ESP
-    # devices fetch firmware updates from it directly.
-    ports: !override
-      - "38080:38080"
-    expose:
-      - 42069
-    networks:
-      - traefik
-    labels:
-      <<: *default-labels
-      traefik.enable: true
-      traefik.http.routers.ep-configurator.rule: Host(`${EPC_HOST:?set EPC_HOST to the EP configurator hostname}`)
-      traefik.http.routers.ep-configurator.tls: true
-      traefik.http.routers.ep-configurator.tls.certresolver: letsencrypt
-      traefik.http.services.ep-configurator.loadbalancer.server.port: "42069"
-    logging: *default-logging
-
-networks:
-  traefik:
-    name: ${NETWORK:-traefik}
-    external: true
