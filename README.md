@@ -18,7 +18,7 @@ Home Assistant, ESPHome and Matter Server use `network_mode: host` - needed for 
 cp .env.example .env
 ```
 
-2. Edit `.env` - set the `*_HOST` values if using Traefik, and `HA_BASE_URL` for the EP configurator.
+2. Edit `.env` - set the `*_HOST` values if using Traefik. The EP configurator reaches HA directly via `host.docker.internal:8123` by default, so `HA_BASE_URL` only needs setting for an HA elsewhere.
 
 3. Create the EP configurator's token file (gitignored). The token is a long-lived token from HA (**Profile → Security**), so this step can wait until HA is running:
 ```bash
