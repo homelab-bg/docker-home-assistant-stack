@@ -46,9 +46,10 @@ services:
     environment:
       - TZ=${TZ:-Australia/Brisbane}
       - STORAGE_PATH=/data
-      # Host NIC Matter uses for IPv6/mDNS - e.g. eth0 on a VM; check with
-      # `ip -br link` on TrueNAS.
-      - PRIMARY_INTERFACE=${MATTER_INTERFACE:-eth0}
+      # Host NIC Matter uses for link-local IPv6/mDNS (e.g. eth0 on a VM; check
+      # with `ip -br addr`). Optional - empty lets matter-server choose, but
+      # a name that doesn't exist on the host is fatal.
+      - PRIMARY_INTERFACE=${MATTER_INTERFACE:-}
 
   ## Everything Presence Configurator
   everything-presence-configurator:

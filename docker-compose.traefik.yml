@@ -3,8 +3,8 @@
 # get labels only (no networks:) - Traefik reaches them via
 # host.docker.internal, which needs `extra_hosts:
 # host.docker.internal:host-gateway` on the Traefik container (set in
-# docker-traefik-portainer). Home Assistant also needs trusted_proxies set in
-# configuration.yaml - see README.
+# docker-traefik-portainer). Home Assistant must also trust Traefik as a
+# reverse proxy (HTTP settings in the UI on HA 2026.8+) - see README.
 x-logging:
   &default-logging
   driver: "json-file"

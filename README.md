@@ -57,18 +57,29 @@ extra_hosts:
 ```
 docker-traefik-portainer sets this already.
 
-**Home Assistant must trust Traefik**, or it rejects proxied requests with `400: Bad Request`. Find Traefik's subnet:
+**Home Assistant must trust Traefik**, or it rejects proxied requests with `400: Bad Request` and logs `your HTTP integration is not set-up for reverse proxies`. Find Traefik's subnets - dual-stack networks print an IPv6 one too; trust it as well, or proxied IPv6 requests get rejected:
 ```bash
-docker network inspect traefik --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
-```
-Then add to `ha/config/configuration.yaml`:
-```yaml
-http:
-  use_x_forwarded_for: true
-  trusted_proxies:
-    - 172.18.0.0/16   # replace with the subnet above
+docker network inspect traefik --format '{{range .IPAM.Config}}{{println .Subnet}}{{end}}'
 ```
 Don't assume Docker's default `172.16.0.0/12` range - it won't match hosts with a custom Docker address pool (e.g. `172.32.0.0/16`).
+
+- **HA 2026.8+**: HTTP settings are configured in the UI - an `http:` block in `configuration.yaml` is ignored (it's imported once, on the first start after upgrading, so a fresh install never picks it up). Browse to HA directly at `http://<host-ip>:8123` (host networking bypasses Traefik), then **Settings → System → Network → HTTP server**: turn on **Trust X-Forwarded-For** and add each subnet above to **Trusted proxies**.
+
+  Alternatively, re-trigger the one-time YAML import: HA stores these settings, plus a "migration done" flag, in `.storage/http`. With the `http:` block below in `configuration.yaml`, stop HA, delete that file and start it again - the block is imported on that start, nothing else is reset:
+  ```bash
+  docker stop home-assistant
+  rm ha/config/.storage/http
+  docker start home-assistant
+  ```
+  Then remove the `http:` block - it's ignored from then on, and raises a deprecation repair issue while present (YAML support is removed in 2027.2.0).
+- **Before 2026.8** (or for the import above): add to `ha/config/configuration.yaml`:
+  ```yaml
+  http:
+    use_x_forwarded_for: true
+    trusted_proxies:
+      - 172.18.0.0/16   # replace with the subnets above
+      - fd00::/64       # IPv6 subnet, if the network has one
+  ```
 
 ### MQTT
 
@@ -144,7 +155,7 @@ x-portals:
   - {name: ESPHome, scheme: https, host: esphome.yourdomain.com, port: 443, path: /}
 ```
 
-The dataset is the project directory, so `.env`, `./secrets` and the app data directories all resolve inside it. Set `MATTER_INTERFACE` in `.env` to the TrueNAS NIC (`ip -br link`) - the `eth0` default suits a VM.
+The dataset is the project directory, so `.env`, `./secrets` and the app data directories all resolve inside it. Set `MATTER_INTERFACE` in `.env` to the TrueNAS NIC carrying your LAN IP (`ip -br addr`) - TrueNAS doesn't use `eth0`-style names, and a name that doesn't exist on the host crashes matter-server with `Unknown interface`.
 
 ## Security
 
