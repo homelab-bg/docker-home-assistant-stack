@@ -1,0 +1,68 @@
+---
+# Home Assistant stack - base layer. Home Assistant, ESPHome and Matter
+# Server use host networking (mDNS/SSDP discovery, Matter, Bluetooth), so
+# they can't join a Docker network - docker-compose.traefik.yml routes to
+# them via the host instead. MQTT and cloudflared are optional overlays.
+services:
+  ## Home Assistant
+  home-assistant:
+    container_name: home-assistant
+    image: ghcr.io/home-assistant/home-assistant:${HA_VER:-2026.9.2}
+    depends_on:
+      - esphome
+    volumes:
+      - ./ha/config:/config
+      - /etc/localtime:/etc/localtime:ro
+      #- /run/dbus:/run/dbus:ro
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Australia/Brisbane}
+    privileged: true
+    network_mode: host
+
+  ## ESPHome
+  esphome:
+    container_name: esphome
+    image: ghcr.io/esphome/esphome:${ESPHOME_VER:-latest}
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Australia/Brisbane}
+    privileged: true
+    network_mode: host
+    volumes:
+      - ./esphome/config:/config
+      - ./esphome/build:/build
+      - ./esphome/cache:/cache
+      - /etc/localtime:/etc/localtime:ro
+
+  ## Matter Server
+  matter-server:
+    container_name: matter-server
+    image: ghcr.io/matter-js/matterjs-server:${MATTER_VER:-stable}
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./matter-server/data:/data
+    environment:
+      - TZ=${TZ:-Australia/Brisbane}
+      - STORAGE_PATH=/data
+      # Host NIC Matter uses for IPv6/mDNS - e.g. eth0 on a VM; check with
+      # `ip -br link` on TrueNAS.
+      - PRIMARY_INTERFACE=${MATTER_INTERFACE:-eth0}
+
+  ## Everything Presence Configurator
+  everything-presence-configurator:
+    image: everythingsmarthome/everything-presence-mmwave-configurator:${EPC_VER:-latest}
+    container_name: ep-configurator
+    restart: unless-stopped
+    ports:
+      - "42069:42069"
+      # Firmware updates - ESP devices fetch from this port directly
+      - "38080:38080"
+    volumes:
+      - ./epp-configurator:/config
+    environment:
+      - HA_BASE_URL=${HA_BASE_URL}
+      # Plain env var (visible via `docker inspect`) - the image has no
+      # _FILE/secrets support.
+      - HA_LONG_LIVED_TOKEN=${HA_LONG_LIVED_TOKEN}

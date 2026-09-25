@@ -1,0 +1,24 @@
+---
+# cloudflared overlay - optional Cloudflare Tunnel for external access. The
+# tunnel token is read from secrets/cloudflare_tunnel_token (gitignored) via
+# TUNNEL_TOKEN_FILE (cloudflared 2025.4.0+) rather than TUNNEL_TOKEN - plain
+# env vars are visible via `docker inspect`. Don't also set TUNNEL_TOKEN: it
+# takes precedence over the file.
+services:
+  cloudflared:
+    container_name: cloudflared
+    image: cloudflare/cloudflared:${CLOUDFLARED_VER:-latest}
+    depends_on:
+      - home-assistant
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TZ=${TZ:-Australia/Brisbane}
+      - TUNNEL_TOKEN_FILE=/run/secrets/cloudflare_tunnel_token
+    secrets:
+      - cloudflare_tunnel_token
+    network_mode: host
+
+secrets:
+  cloudflare_tunnel_token:
+    file: ./secrets/cloudflare_tunnel_token

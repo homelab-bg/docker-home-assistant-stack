@@ -1,0 +1,23 @@
+---
+# Mosquitto overlay - optional, for when this stack is the MQTT broker (not
+# needed if something else, e.g. an SMHub, already provides one). LAN-only
+# IoT on 1883, no TLS; auth (password_file, allow_anonymous false) lives in
+# mqtt/config/mosquitto.conf - see README.
+services:
+  home-assistant:
+    depends_on:
+      - mqtt
+
+  ## Mosquitto MQTT
+  mqtt:
+    container_name: mqtt
+    image: eclipse-mosquitto:${MOSQUITTO_VER:-latest}
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Australia/Brisbane}
+    ports:
+      - 1883:1883
+    volumes:
+      - ./mqtt/config:/mosquitto/config
+      - ./mqtt/data:/mosquitto/data
+      - ./mqtt/log:/mosquitto/log

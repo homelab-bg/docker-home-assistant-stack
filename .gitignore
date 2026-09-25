@@ -1,0 +1,39 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# App data (HA config incl. secrets.yaml, ESPHome, Matter, MQTT, EP configurator)
+ha/
+esphome/
+matter-server/
+mqtt/
+epp-configurator/
+
+# Data directories
+data/
+volumes/
+
+# Secrets
+secrets/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Temporary files
+*.tmp
+*.temp
