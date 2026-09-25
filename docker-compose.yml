@@ -63,6 +63,12 @@ services:
       - ./epp-configurator:/config
     environment:
       - HA_BASE_URL=${HA_BASE_URL}
-      # Plain env var (visible via `docker inspect`) - the image has no
-      # _FILE/secrets support.
-      - HA_LONG_LIVED_TOKEN=${HA_LONG_LIVED_TOKEN}
+      # Read from secrets/ha_long_lived_token (gitignored) rather than a plain
+      # env var, which is visible via `docker inspect`.
+      - HA_LONG_LIVED_TOKEN_FILE=/run/secrets/ha_long_lived_token
+    secrets:
+      - ha_long_lived_token
+
+secrets:
+  ha_long_lived_token:
+    file: ./secrets/ha_long_lived_token

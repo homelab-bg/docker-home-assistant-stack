@@ -18,7 +18,15 @@ Home Assistant, ESPHome and Matter Server use `network_mode: host` - needed for 
 cp .env.example .env
 ```
 
-2. Edit `.env` - set the `*_HOST` values if using Traefik, and `HA_BASE_URL` / `HA_LONG_LIVED_TOKEN` for the EP configurator.
+2. Edit `.env` - set the `*_HOST` values if using Traefik, and `HA_BASE_URL` for the EP configurator.
+
+3. Create the EP configurator's token file (gitignored). The token is a long-lived token from HA (**Profile → Security**), so this step can wait until HA is running:
+```bash
+mkdir -p secrets
+echo -n "your-long-lived-token" > secrets/ha_long_lived_token
+```
+
+4. Set data directory ownership - see [Permissions](#permissions).
 
 ## Deployment Options
 
@@ -49,13 +57,18 @@ extra_hosts:
 ```
 docker-traefik-portainer sets this already.
 
-**Home Assistant must trust Traefik**, or it rejects proxied requests with `400: Bad Request`. Add to `ha/config/configuration.yaml`:
+**Home Assistant must trust Traefik**, or it rejects proxied requests with `400: Bad Request`. Find Traefik's subnet:
+```bash
+docker network inspect traefik --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
+```
+Then add to `ha/config/configuration.yaml`:
 ```yaml
 http:
   use_x_forwarded_for: true
   trusted_proxies:
-    - 172.16.0.0/12   # Docker's default bridge range - confirm Traefik's subnet with `docker network inspect traefik`
+    - 172.18.0.0/16   # replace with the subnet above
 ```
+Don't assume Docker's default `172.16.0.0/12` range - it won't match hosts with a custom Docker address pool (e.g. `172.32.0.0/16`).
 
 ### MQTT
 
@@ -82,6 +95,35 @@ mkdir -p secrets
 echo -n "your-tunnel-token" > secrets/cloudflare_tunnel_token
 ```
 Requires cloudflared 2025.4.0+ (`TUNNEL_TOKEN_FILE` support).
+
+## Permissions
+
+None of these images read `PUID`/`PGID`, and several run as a fixed non-root user. Docker creates missing bind-mount directories as root, so set their ownership once before first start:
+
+| Container | Runs as | Needs |
+|---|---|---|
+| matter-server | `1000:1000` | Write access to `matter-server/data` - otherwise `EACCES: permission denied, mkdir '/data/config'` |
+| mqtt | `1883:1883` (entrypoint chowns `data` only) | Write access to `mqtt/log` if logging to file |
+| cloudflared | `65532:65532` | Read access to `secrets/cloudflare_tunnel_token` |
+| home-assistant, esphome, ep-configurator | root | - |
+
+```bash
+mkdir -p matter-server/data mqtt/{config,data,log}
+chown -R 1000:1000 matter-server/data
+chown -R 1883:1883 mqtt/data mqtt/log
+chmod 644 secrets/cloudflare_tunnel_token   # or: chown 65532 + chmod 400
+```
+
+Files Home Assistant and ESPHome create are owned by root, so editing them from another container (e.g. code-server running as a non-root user) needs matching permissions.
+
+## mDNS (port 5353)
+
+Home Assistant's zeroconf (plus ESPHome and Matter) share UDP 5353 with the host. If something on the host holds it exclusively, HA logs `OSError: [Errno 98] Address in use` for `('', 5353)`, and `zeroconf`, `ssdp`, `cloud` and `default_config` fail to set up. Find the owner with:
+```bash
+ss -ulpn 'sport = :5353'
+```
+- **TrueNAS**: TrueNAS's `avahi-daemon` (its mDNS service announcement) binds 5353 exclusively. Disable it under **Network → Global Configuration → Service Announcement → mDNS**, then restart the app. TrueNAS then stops advertising itself via mDNS (`<hostname>.local`, Mac SMB/Time Machine discovery). TrueNAS generates avahi's config, so don't edit `avahi-daemon.conf` directly.
+- **VM with avahi**: set `disallow-other-stacks=no` in `/etc/avahi/avahi-daemon.conf` and restart avahi, or disable avahi.
 
 ## TrueNAS Deployment
 
