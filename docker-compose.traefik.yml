@@ -14,7 +14,6 @@ x-logging:
     tag: "{{.Name}}"
 
 x-common-labels: &default-labels
-  logging: "promtail"
   logging_jobname: "containerlogs"
   stackname: ${MONITORING_STACK}
 
